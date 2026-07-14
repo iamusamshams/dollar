@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Field Force Directory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', 
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { 
+            transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .credit-btn { 
+            position: fixed; 
+            bottom: 24px; 
+            right: 24px; 
+            border-radius: 50px; 
+            box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3); 
+            transition: all 0.3s ease;
+        }
+        .credit-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 25px rgba(14, 165, 233, 0.4); 
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-[#0b1329] dark:text-f1f5f9 font-sans min-h-screen pb-20 transition-colors duration-300">
+
+    <nav class="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-md">
+        <div class="container mx-auto px-4 flex justify-between items-center h-14">
+            <div class="flex items-center gap-2 font-bold text-lg tracking-wider">
+                <i class="fas fa-network-wired text-cyan-300"></i>
+                <span>MUBS Portal</span>
+            </div>
+
+            <div id="nav-links" class="flex items-center gap-6 text-sm font-medium">
+                <a href="#" class="hover:text-cyan-300 transition-colors py-1 border-b-2 border-transparent hover:border-cyan-300">Home</a>
+                <a href="#" class="hover:text-cyan-300 transition-colors py-1 border-b-2 border-transparent hover:border-cyan-300">About</a>
+                <a href="#" class="hover:text-cyan-300 transition-colors py-1 border-b-2 border-transparent hover:border-cyan-300">Organogram</a>
+                <a href="#" class="hover:text-cyan-300 transition-colors py-1 border-b-2 border-transparent hover:border-cyan-300">FF Directory</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="container mx-auto px-4 pt-6 flex justify-between items-center relative">
+        <h1 id="page-title" class="text-3xl font-bold text-blue-600 dark:text-sky-400 mx-auto tracking-wide transition-colors">Field Force Directory</h1>
+        <button id="theme-toggle" class="absolute right-4 p-3 rounded-xl bg-white shadow-md border border-slate-100 dark:bg-slate-800 dark:border-slate-700 text-xl hover:scale-110 active:scale-95 transition-all duration-200">
+            <i id="theme-icon" class="fas fa-moon text-slate-600 dark:text-yellow-400"></i>
+        </button>
+    </header>
+
+    <section class="container mx-auto px-4 mt-8">
+        <div id="controls-container" class="bg-white dark:bg-[#1c2541] dark:border-[#3a506b] p-5 rounded-xl shadow-sm border border-slate-100 flex flex-wrap gap-4 items-center transition-all">
+            
+            <div class="flex-1 min-w-[250px]">
+                <input type="text" id="search-box" placeholder="Search anything..." class="w-full px-4 py-2.5 border border-slate-200 dark:border-[#3a506b] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-transparent text-sm dark:text-slate-100 placeholder-slate-400">
+            </div>
+
+            <div id="dynamic-filters" class="flex flex-wrap gap-3 flex-2"></div>
+
+            <button id="clear-filters" class="px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium text-sm rounded-lg shadow-sm transition-colors hidden">
+                Clear Filters
+            </button>
+        </div>
+    </section>
+
+    <main class="container mx-auto px-4 mt-6">
+        <div class="bg-white dark:bg-[#1c2541] dark:border-[#3a506b] rounded-xl shadow-sm border border-slate-100 overflow-hidden overflow-x-auto transition-all" id="table-card">
+            <table class="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                    <tr id="table-headers"></tr>
+                </thead>
+                <tbody id="table-body" class="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
+                    <tr>
+                        <td class="p-8 text-center text-slate-400 dark:text-slate-500" id="loading-text">Loading data from hierarchy.csv...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <div class="credit-btn bg-[#3aacf6] text-white px-5 py-2.5 font-medium text-sm flex items-center gap-2">
+        <span>Created by MUBS</span>
+    </div>
+
+    <script>
+        let csvData = [];
+        let csvHeaders = [];
+        let activeFilters = {};
+
+        // 🎯 MERGE GROUPS CONFIGURATION
+
+        // Group 1: Town
+        const mainColumn = 'Town'; 
+        const extraColumn1 = 'IDTOBEDEL';     
+        const extraColumn2 = 'Market';   
+        
+        // Group 2: TSS_1
+        const mainColumn2 = 'TSS 1';      
+        const extraColumn3 = 'TSS_1_ID';   
+        const extraColumn4 = 'TSS_1_Contact';
+
+        // Group 3: TSS_2
+        const mainColumn3 = 'TSS 2';      
+        const extraColumn5 = 'TSS_2_ID';   
+        const extraColumn6 = 'TSS_2_Contact';
+
+        // Group 4: SUPERVISOR_1
+        const mainColumn4 = 'SUPERVISOR 1';      
+        const extraColumn7 = 'SUPERVISOR_1_ID';   
+        const extraColumn8 = 'SUPERVISOR_1_Contact';
+
+        // Group 5: SUPERVISOR_2
+        const mainColumn5 = 'SUPERVISOR 2';      
+        const extraColumn9 = 'SUPERVISOR_2_ID';   
+        const extraColumn10 = 'SUPERVISOR_2_Contact';
+
+        // Group 6: MANAGER
+        const mainColumn6 = 'MANAGER';      
+        const extraColumn11 = 'Manager_ID';   
+        const extraColumn12 = 'Manager_Contact';
+
+        const searchBox = document.getElementById('search-box');
+        const dynamicFiltersContainer = document.getElementById('dynamic-filters');
+        const tableHeaders = document.getElementById('table-headers');
+        const tableBody = document.getElementById('table-body');
+        const clearBtn = document.getElementById('clear-filters');
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIcon = document.getElementById('theme-icon');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            Papa.parse('hierarchy.csv', {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if(results.data && results.data.length > 0) {
+                        csvData = results.data;
+                        csvHeaders = results.meta.fields;
+                        initTable();
+                    } else {
+                        document.getElementById('loading-text').innerText = "No data found or file is empty.";
+                    }
+                },
+                error: function(err) {
+                    document.getElementById('loading-text').innerText = "Error loading hierarchy.csv. Make sure the file exists in the same directory.";
+                    console.error(err);
+                }
+            });
+        });
+
+        // Helper function to check if a header should be hidden
+        function isExtraColumn(header) {
+            return [
+                extraColumn1, extraColumn2, extraColumn3, extraColumn4,
+                extraColumn5, extraColumn6, extraColumn7, extraColumn8,
+                extraColumn9, extraColumn10, extraColumn11, extraColumn12
+            ].includes(header);
+        }
+
+        // Helper function to check if a header is a main header for a merged block
+        function isMainColumn(header) {
+            return [mainColumn, mainColumn2, mainColumn3, mainColumn4, mainColumn5, mainColumn6].includes(header);
+        }
+
+        function initTable() {
+            tableHeaders.innerHTML = '';
+            tableHeaders.className = "bg-transparent"; 
+
+            csvHeaders.forEach(header => {
+                // Agar column extra data wala hai toh use alag header nahi denge
+                if (isExtraColumn(header)) return;
+
+                const th = document.createElement('th');
+                th.className = 'px-4 py-3 font-semibold text-xs text-white uppercase tracking-wider text-left bg-gradient-to-r from-blue-500 to-cyan-500';
+                th.innerText = header;
+                tableHeaders.appendChild(th);
+            });
+
+            dynamicFiltersContainer.innerHTML = '';
+            const filterColumns = ['Town', 'MANAGER', 'Market']; 
+            
+            filterColumns.forEach(colName => {
+                const uniqueValues = [...new Set(csvData.map(item => item[colName]).filter(Boolean))];
+                
+                const select = document.createElement('select');
+                select.className = 'px-3 py-2.5 border border-slate-200 dark:border-[#3a506b] rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-[#1c2541] text-slate-800 dark:text-slate-100 text-sm min-w-[160px] cursor-pointer transition-all';
+                select.dataset.column = colName;
+                
+                select.innerHTML = `<option value="" class="dark:bg-[#1c2541]">Filter ${colName}</option>`;
+                uniqueValues.forEach(val => {
+                    select.innerHTML += `<option value="${val}" class="dark:bg-[#1c2541]">${val}</option>`;
+                });
+
+                select.addEventListener('change', handleFilterChange);
+                dynamicFiltersContainer.appendChild(select);
+            });
+
+            renderRows(csvData);
+        }
+
+        function renderRows(data, searchVal = '') {
+            tableBody.innerHTML = '';
+            
+            if(data.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="${csvHeaders.length}" class="p-8 text-center text-slate-400 dark:text-slate-500">No matching records found.</td></tr>`;
+                return;
+            }
+
+            const columnSizes = {
+                'MANAGER': 'text-sm',        
+                'Town': 'text-xs',           
+                'Market': 'text-[11px]',     
+                'STATUS': 'text-[10px]'      
+            };
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = 'odd:bg-white even:bg-gradient-to-r even:from-emerald-300/20 even:to-yellow-200/30 dark:odd:bg-transparent dark:even:bg-slate-800/60 hover:shadow-md hover:-translate-y-0.5 bg-gradient-to-r hover:from-blue-100 hover:to-indigo-50/50 dark:hover:from-sky-900/50 dark:hover:to-slate-800/50 transition-all duration-300 ease-out';
+                
+                csvHeaders.forEach(header => {
+                    if (isExtraColumn(header)) return;
+
+                    const td = document.createElement('td');
+                    let currentSize = columnSizes[header] || 'text-sm';
+                    
+                    td.className = `px-6 py-4 whitespace-normal font-medium ${currentSize}`;
+                    
+                    if (header === 'MARKET' || header === 'Market') {
+                        td.classList.add('text-blue-600', 'dark:text-blue-400');
+                    } 
+                    else if (isMainColumn(header)) {
+                        td.classList.add('text-cyan-600', 'dark:text-cyan-400', 'font-bold');
+                    }
+                    else {
+                        td.classList.add('text-slate-700', 'dark:text-slate-200');
+                    }
+
+                    let content = row[header] || '---';
+
+                    // 🎯 MERGING LOGIC GENERATION
+                    if (header === mainColumn) {
+                        let line2 = row[extraColumn1] ? `<div class="inline-block bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 mt-1.5">${row[extraColumn1]}</div>` : '';
+                        let line3 = row[extraColumn2] ? `<span class="text-blue-600 dark:text-blue-400 text-xs font-semibold m-1">${row[extraColumn2]}</span>` : '';
+                        content = `<div class="text-cyan-600 dark:text-cyan-400 font-bold">${content}</div>${line2}${line3}`;
+                    } 
+                    else if (header === mainColumn2) {
+                        let line2 = row[extraColumn3] ? `<div class="inline-block bg-cyan-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 mt-1.5"><i class="far fa-id-badge text-slate-400 me-1"></i> ${row[extraColumn3]}</div>` : '';
+                        let line3 = row[extraColumn4] ? `<div class="text-cyan-600 dark:text-slate-500 text-xs font-normal mt-0.5 flex items-center gap-1"><i class="fas fa-phone-alt text-cyan-500/70 text-[10px]"></i> ${row[extraColumn4]}</div>` : '';
+                        content = `<div class="text-cyan-600 dark:text-cyan-400 font-bold">${content}</div>${line2}${line3}`;
+                    }
+                    else if (header === mainColumn3) {
+                        let line2 = row[extraColumn5] ? `<div class="inline-block bg-cyan-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 mt-1.5"><i class="far fa-id-badge text-slate-400 me-1"></i> ${row[extraColumn5]}</div>` : '';
+                        let line3 = row[extraColumn6] ? `<div class="text-cyan-600 dark:text-slate-500 text-xs font-normal mt-0.5 flex items-center gap-1"><i class="fas fa-phone-alt text-cyan-500/70 text-[10px]"></i>${row[extraColumn6]}</div>` : '';
+                        content = `<div class="text-cyan-600 dark:text-cyan-400 font-bold">${content}</div>${line2}${line3}`;
+                    }
+                    else if (header === mainColumn4) {
+                        let line2 = row[extraColumn7] ? `<div class="inline-block bg-cyan-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 mt-1.5"><i class="far fa-id-badge text-slate-400 me-1"></i>  ${row[extraColumn7]}</div>` : '';
+                        let line3 = row[extraColumn8] ? `<div class="text-cyan-600 dark:text-slate-500 text-xs font-normal mt-0.5 flex items-center gap-1"><i class="fas fa-phone-alt text-cyan-500/70 text-[10px]"></i>${row[extraColumn8]}</div>` : '';
+                        content = `<div class="text-cyan-600 dark:text-cyan-400 font-bold">${content}</div>${line2}${line3}`;
+                    }
+                    else if (header === mainColumn5) {
+                        let line2 = row[extraColumn9] ? `<div class="inline-block bg-cyan-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 mt-1.5"><i class="far fa-id-badge text-slate-400 me-1"></i> ${row[extraColumn9]}</div>` : '';
+                        let line3 = row[extraColumn10] ? `<div class="text-cyan-600 dark:text-slate-500 text-xs font-normal mt-0.5 flex items-center gap-1"><i class="fas fa-phone-alt text-cyan-500/70 text-[10px]"></i>${row[extraColumn10]}</div>` : '';
+                        content = `<div class="text-cyan-600 dark:text-cyan-400 font-bold">${content}</div>${line2}${line3}`;
+                    }
+                    else if (header === mainColumn6) {
+                        let line2 = row[extraColumn11] ? `<div class="inline-block bg-cyan-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-mono px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 mt-1.5"><i class="far fa-id-badge text-slate-400 me-1"></i>  ${row[extraColumn11]}</div>` : '';
+                        let line3 = row[extraColumn12] ? `<div class="text-cyan-600 dark:text-slate-500 text-xs font-normal mt-0.5 flex items-center gap-1"><i class="fas fa-phone-alt text-cyan-500/70 text-[10px]"></i>${row[extraColumn12]}</div>` : '';
+                        content = `<div class="text-cyan-600 dark:text-cyan-400 font-bold">${content}</div>${line2}${line3}`;
+                    }
+                    else {
+                        content = content.replace(/\n/g, '<br>'); 
+                    }
+
+                    // 🎯 STATUS COLUMN BADGE LOGIC
+                    if ((header === 'STATUS' || header === 'Status') && content !== '---') {
+                        let badgeClasses = "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600";
+                        const lowerContent = content.toLowerCase().trim();
+                        
+                        if (lowerContent.includes('unregistered') || lowerContent.includes('resigned')) {
+                            badgeClasses = "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/60";
+                        } 
+                        else if (lowerContent.includes('registered')) {
+                            badgeClasses = "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60";
+                        }
+
+                        td.innerHTML = `<span class="inline-block px-3 py-1 border rounded-lg font-mono text-xs font-bold tracking-wide shadow-sm ${badgeClasses}">${content}</span>`;
+                    } else {
+                        td.innerHTML = content;
+                    }
+
+                    // 🎯 SEARCH HIGHLIGHT LOGIC
+                    if (searchVal && content !== '---') {
+                        const escapedSearch = searchVal.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        const regex = new RegExp(`(${escapedSearch})`, 'gi');
+                        td.innerHTML = td.innerHTML.replace(regex, '<mark class="bg-red-300 dark:bg-red-800 text-black dark:text-white rounded-sm px-0.5">$1</mark>');
+                    }
+
+                    // 🎯 RESIGNED ENTIRE CELL FORCE-STYLING
+                    if (content.toLowerCase().includes('resigned')) {
+                        // Cell layout text red and bold
+                        td.className = `px-6 py-4 whitespace-normal text-red-600 dark:text-red-400 font-bold ${currentSize}`;
+                        
+                        // Safely swap cyan/blue classes to red so children inherit correctly
+                        td.querySelectorAll('div, span, i').forEach(el => {
+                            el.classList.forEach(className => {
+                                if (className.includes('cyan-') || className.includes('blue-')) {
+                                    el.classList.remove(className);
+                                    el.classList.add(className.replace('cyan-', 'red-').replace('blue-', 'red-'));
+                                }
+                            });
+                        });
+                    }
+
+                    tr.appendChild(td);
+                });
+                
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function handleFilterChange(e) {
+            const col = e.target.dataset.column;
+            const val = e.target.value;
+
+            if(val === "") {
+                delete activeFilters[col];
+            } else {
+                activeFilters[col] = val;
+            }
+            filterData();
+        }
+
+        searchBox.addEventListener('input', filterData);
+
+        function filterData() {
+            const searchVal = searchBox.value.trim().toLowerCase();
+            
+            if(searchVal || Object.keys(activeFilters).length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+
+            const filtered = csvData.filter(row => {
+                for (let col in activeFilters) {
+                    if (row[col] !== activeFilters[col]) return false;
+                }
+                if(searchVal) {
+                    return csvHeaders.some(header => {
+                        return String(row[header]).toLowerCase().includes(searchVal);
+                    });
+                }
+                return true;
+            });
+
+            renderRows(filtered, searchVal);
+        }
+
+        clearBtn.addEventListener('click', () => {
+            searchBox.value = '';
+            activeFilters = {};
+            document.querySelectorAll('#dynamic-filters select').forEach(select => select.value = '');
+            clearBtn.classList.add('hidden');
+            renderRows(csvData);
+        });
+
+        themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            
+            if(isDark) {
+                themeIcon.className = 'fas fa-sun text-yellow-400';
+            } else {
+                themeIcon.className = 'fas fa-moon text-slate-600';
+            }
+        });
+    </script>
+</body>
+</html>
